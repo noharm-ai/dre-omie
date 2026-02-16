@@ -1,0 +1,21 @@
+# Dados sensíveis
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.ods
+*.pdf
+
+# Credenciais
+.env
+.env.*
+
+# Logs / temporários
+*.log
+*.tmp
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
