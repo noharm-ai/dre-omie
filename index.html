@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NoHarm - DRE OMIE (JS)</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    :root {
+      --bg: #f5f8f5;
+      --card: #ffffff;
+      --ink: #1f2d24;
+      --brand: #21624f;
+      --ok: #156145;
+      --bad: #9f1d35;
+      --border: #d8e2dd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at top right, #e7f3ec 0%, var(--bg) 45%);
+      color: var(--ink);
+    }
+    main { max-width: 980px; margin: 32px auto; padding: 0 16px 24px; }
+    h1 { margin-top: 0; font-size: 1.9rem; color: var(--brand); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(24, 64, 48, 0.08);
+    }
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    label { font-weight: 600; font-size: 0.95rem; }
+    input[type=file], input[type=text] {
+      width: 100%;
+      margin-top: 6px;
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fbfdfb;
+    }
+    input[type=checkbox] { width: auto; margin: 0; }
+    .full { grid-column: span 2; }
+    button {
+      border: none;
+      border-radius: 8px;
+      background: var(--brand);
+      color: #fff;
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    th { color: #355446; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .error {
+      border: 1px solid #f2cbd3;
+      background: #fff3f6;
+      color: #8c2033;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+    }
+    .hidden { display: none; }
+    .muted { color: #506b5f; margin: 6px 0; }
+    .tip {
+      display: inline-block;
+      margin-left: 6px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid #9cb9ad;
+      color: #2e5a49;
+      text-align: center;
+      line-height: 16px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: help;
+      background: #f0f7f3;
+    }
+    .drilldown {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #f9fcfa;
+    }
+    .drilldown summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: #24473a;
+    }
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    .drill-table th, .drill-table td { white-space: nowrap; }
+    @media (max-width: 680px) {
+      form { grid-template-columns: 1fr; }
+      .full { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>NoHarm - Receitas vs Despesas (DRE OMIE)</h1>
+    <div id="error" class="error hidden"></div>
+
+    <section class="card">
+      <form id="upload-form">
+        <label class="full">
+          Excel DRE receitas/despesas (.xlsx)
+          <span class="tip" title="exportar do OMIE em DRE > Mês Anterior > Expandir Todas">?</span>
+          <input type="file" id="excel-file" accept=".xlsx" required>
+        </label>
+        <button type="submit" class="full">Processar DRE</button>
+      </form>
+      <p class="muted">Processamento local no navegador. Nenhum backend necessário.</p>
+    </section>
+
+    <section id="result-section" class="card hidden">
+      <h2>Resultado</h2>
+      <table>
+        <tr><th>Receitas selecionadas</th><td id="receitas-base"></td></tr>
+        <tr><th>Despesas selecionadas</th><td id="despesas-base"></td></tr>
+        <tr><th>Receitas removidas</th><td id="receitas-removidas"></td></tr>
+        <tr><th>Despesas removidas</th><td id="despesas-removidas"></td></tr>
+        <tr><th>Ajuste receitas</th><td id="ajuste-receitas-view"></td></tr>
+        <tr><th>Ajuste despesas</th><td id="ajuste-despesas-view"></td></tr>
+        <tr><th>Receitas finais</th><td id="receitas-final"></td></tr>
+        <tr><th>Despesas finais</th><td id="despesas-final"></td></tr>
+        <tr><th>Saldo (receitas - despesas)</th><td id="saldo-final"></td></tr>
+      </table>
+      <p id="status" class="ok"><strong></strong></p>
+
+      <form id="filters-form">
+        <label>
+          Ajuste nas receitas (R$)
+          <input type="text" id="ajuste-receitas" value="0" placeholder="Ex: 1000 ou -500">
+        </label>
+        <label>
+          Ajuste nas despesas (R$)
+          <input type="text" id="ajuste-despesas" value="0" placeholder="Ex: 200 ou -100">
+        </label>
+      </form>
+
+      <p class="muted">No drilldown abaixo, desmarque para remover do cálculo. Padrão: todos selecionados.</p>
+
+      <details class="drilldown" open>
+        <summary>Drilldown de receitas por cliente (<span id="receitas-count">0</span>)</summary>
+        <div class="btn-row">
+          <button type="button" id="receitas-all">Marcar todas</button>
+          <button type="button" id="receitas-none">Desmarcar todas</button>
+        </div>
+        <div class="table-wrap">
+          <table class="drill-table">
+            <thead>
+              <tr><th>Usar</th><th>Cliente</th><th>Receita Final</th></tr>
+            </thead>
+            <tbody id="receitas-body"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="drilldown" open>
+        <summary>Drilldown de despesas por fornecedor (<span id="despesas-count">0</span>)</summary>
+        <div class="btn-row">
+          <button type="button" id="despesas-all">Marcar todas</button>
+          <button type="button" id="despesas-none">Desmarcar todas</button>
+        </div>
+        <div class="table-wrap">
+          <table class="drill-table">
+            <thead>
+              <tr><th>Usar</th><th>Fornecedor</th><th>Despesa Final</th></tr>
+            </thead>
+            <tbody id="despesas-body"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    const state = {
+      receitas: [],
+      despesas: [],
+      selectedReceitas: new Set(),
+      selectedDespesas: new Set(),
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function normalizeText(value) {
+      return (value || "")
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+    }
+
+    function formatBRL(value) {
+      return Number(value || 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      });
+    }
+
+    function parseAdjustment(value) {
+      const raw = (value || "").trim().replace(/\s+/g, "");
+      if (!raw) return 0;
+      let normalized = raw;
+      if (normalized.includes(",") && normalized.includes(".")) {
+        normalized = normalized.replace(/\./g, "").replace(",", ".");
+      } else if (normalized.includes(",")) {
+        normalized = normalized.replace(",", ".");
+      }
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function detectHeader(rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] || [];
+        let partnerCol = -1;
+        let valueCol = -1;
+        for (let c = 0; c < row.length; c++) {
+          const cell = normalizeText(row[c]);
+          if (cell === "cliente ou fornecedor") partnerCol = c;
+          if (cell === "valor") valueCol = c;
+        }
+        if (partnerCol >= 0 && valueCol >= 0) return { rowIndex: i, partnerCol, valueCol };
+      }
+      return null;
+    }
+
+    function parseDreRows(rows) {
+      const header = detectHeader(rows);
+      if (!header) {
+        throw new Error("Layout não identificado. Use o arquivo do OMIE em DRE > Mês Anterior > Expandir Todas.");
+      }
+
+      const aggregate = new Map();
+      for (let i = header.rowIndex + 1; i < rows.length; i++) {
+        const row = rows[i] || [];
+        const rowText = row.map((v) => normalizeText(v));
+        if (rowText.some((t) => t.includes("total geral"))) continue;
+
+        const partnerRaw = row[header.partnerCol];
+        const valueRaw = row[header.valueCol];
+        if (partnerRaw == null || partnerRaw === "") continue;
+
+        const partner = String(partnerRaw).trim();
+        if (!partner || normalizeText(partner) === "cliente ou fornecedor") continue;
+
+        const value = typeof valueRaw === "number" ? valueRaw : Number(valueRaw);
+        if (!Number.isFinite(value)) continue;
+
+        aggregate.set(partner, (aggregate.get(partner) || 0) + value);
+      }
+
+      const receitas = [];
+      const despesas = [];
+      let rId = 1;
+      let dId = 1;
+
+      for (const [partner, total] of aggregate.entries()) {
+        if (total > 0) receitas.push({ id: `r${rId++}`, cliente: partner, valor: total });
+        else if (total < 0) despesas.push({ id: `d${dId++}`, fornecedor: partner, valor: Math.abs(total) });
+      }
+
+      receitas.sort((a, b) => b.valor - a.valor);
+      despesas.sort((a, b) => b.valor - a.valor);
+      return { receitas, despesas };
+    }
+
+    async function parseDreFile(file) {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+      return parseDreRows(rows);
+    }
+
+    function recalculate() {
+      const receitasBase = state.receitas
+        .filter((r) => state.selectedReceitas.has(r.id))
+        .reduce((acc, r) => acc + r.valor, 0);
+      const despesasBase = state.despesas
+        .filter((d) => state.selectedDespesas.has(d.id))
+        .reduce((acc, d) => acc + d.valor, 0);
+
+      const receitasTotal = state.receitas.reduce((acc, r) => acc + r.valor, 0);
+      const despesasTotal = state.despesas.reduce((acc, d) => acc + d.valor, 0);
+
+      const ajusteReceitas = parseAdjustment($("ajuste-receitas").value);
+      const ajusteDespesas = parseAdjustment($("ajuste-despesas").value);
+
+      const receitasFinal = receitasBase + ajusteReceitas;
+      const despesasFinal = despesasBase + ajusteDespesas;
+      const saldo = receitasFinal - despesasFinal;
+
+      $("receitas-base").textContent = formatBRL(receitasBase);
+      $("despesas-base").textContent = formatBRL(despesasBase);
+      $("receitas-removidas").textContent = formatBRL(Math.max(0, receitasTotal - receitasBase));
+      $("despesas-removidas").textContent = formatBRL(Math.max(0, despesasTotal - despesasBase));
+      $("ajuste-receitas-view").textContent = formatBRL(ajusteReceitas);
+      $("ajuste-despesas-view").textContent = formatBRL(ajusteDespesas);
+      $("receitas-final").textContent = formatBRL(receitasFinal);
+      $("despesas-final").textContent = formatBRL(despesasFinal);
+      $("saldo-final").textContent = formatBRL(saldo);
+
+      const statusEl = $("status");
+      statusEl.className = saldo >= 0 ? "ok" : "bad";
+      statusEl.innerHTML = `<strong>${saldo >= 0 ? "Superávit" : "Déficit"}</strong>`;
+    }
+
+    function renderTables() {
+      $("receitas-count").textContent = String(state.receitas.length);
+      $("despesas-count").textContent = String(state.despesas.length);
+
+      $("receitas-body").innerHTML = state.receitas.map((r) => `
+        <tr>
+          <td><input type="checkbox" data-kind="receita" data-id="${r.id}" ${state.selectedReceitas.has(r.id) ? "checked" : ""}></td>
+          <td>${escapeHtml(r.cliente)}</td>
+          <td>${formatBRL(r.valor)}</td>
+        </tr>
+      `).join("");
+
+      $("despesas-body").innerHTML = state.despesas.map((d) => `
+        <tr>
+          <td><input type="checkbox" data-kind="despesa" data-id="${d.id}" ${state.selectedDespesas.has(d.id) ? "checked" : ""}></td>
+          <td>${escapeHtml(d.fornecedor)}</td>
+          <td>${formatBRL(d.valor)}</td>
+        </tr>
+      `).join("");
+
+      document.querySelectorAll('input[data-kind="receita"]').forEach((el) => {
+        el.addEventListener("change", (evt) => {
+          const id = evt.target.dataset.id;
+          if (evt.target.checked) state.selectedReceitas.add(id);
+          else state.selectedReceitas.delete(id);
+          recalculate();
+        });
+      });
+
+      document.querySelectorAll('input[data-kind="despesa"]').forEach((el) => {
+        el.addEventListener("change", (evt) => {
+          const id = evt.target.dataset.id;
+          if (evt.target.checked) state.selectedDespesas.add(id);
+          else state.selectedDespesas.delete(id);
+          recalculate();
+        });
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function selectAll(kind, selected) {
+      if (kind === "receita") {
+        state.selectedReceitas = selected
+          ? new Set(state.receitas.map((r) => r.id))
+          : new Set();
+      } else {
+        state.selectedDespesas = selected
+          ? new Set(state.despesas.map((d) => d.id))
+          : new Set();
+      }
+      renderTables();
+      recalculate();
+    }
+
+    function showError(message) {
+      $("error").textContent = message;
+      $("error").classList.remove("hidden");
+    }
+
+    function clearError() {
+      $("error").textContent = "";
+      $("error").classList.add("hidden");
+    }
+
+    $("upload-form").addEventListener("submit", async (evt) => {
+      evt.preventDefault();
+      clearError();
+
+      const file = $("excel-file").files[0];
+      if (!file) {
+        showError("Selecione um arquivo .xlsx.");
+        return;
+      }
+
+      try {
+        const parsed = await parseDreFile(file);
+        state.receitas = parsed.receitas;
+        state.despesas = parsed.despesas;
+        state.selectedReceitas = new Set(state.receitas.map((r) => r.id));
+        state.selectedDespesas = new Set(state.despesas.map((d) => d.id));
+
+        $("result-section").classList.remove("hidden");
+        renderTables();
+        recalculate();
+      } catch (err) {
+        showError(err.message || "Falha ao processar o arquivo.");
+      }
+    });
+
+    $("ajuste-receitas").addEventListener("input", recalculate);
+    $("ajuste-despesas").addEventListener("input", recalculate);
+    $("receitas-all").addEventListener("click", () => selectAll("receita", true));
+    $("receitas-none").addEventListener("click", () => selectAll("receita", false));
+    $("despesas-all").addEventListener("click", () => selectAll("despesa", true));
+    $("despesas-none").addEventListener("click", () => selectAll("despesa", false));
+  </script>
+</body>
+</html>
